@@ -1,0 +1,113 @@
+import os
+import io
+import sys
+import time
+import torch
+import shutil
+import logging
+import argparse
+import pandas as pd
+from typing import List
+from datasets import load_dataset
+from torch.utils.data.dataloader import DataLoader
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+def back_translate(data, src2tar, tar2src):
+    src2tar_tokenizer = AutoTokenizer.from_pretrained(src2tar)
+    src2tar_model = AutoModelForSeq2SeqLM.from_pretrained(src2tar) 
+    tar2src_tokenizer = AutoTokenizer.from_pretrained(tar2src)
+    tar2src_model = AutoModelForSeq2SeqLM.from_pretrained(tar2src)
+    
+    translations = []
+    dataloader = DataLoader(data, batch_size = 16, shuffle = False)
+    
+    for _, examples_chunk in enumerate(dataloader):
+        examples_chunk = [text for text in examples_chunk]
+        batch = src2tar_tokenizer(
+            examples_chunk, 
+            return_tensors="pt", 
+            truncation=True, 
+            padding="longest"
+        )
+        src2tar_outputs = src2tar_model.generate(
+            input_ids = batch.input_ids, 
+            attention_mask=batch.attention_mask
+        )
+        tar2src_outputs = tar2src_model.generate(src2tar_outputs)
+        dec = tar2src_tokenizer.batch_decode(
+            tar2src_outputs, 
+            skip_special_tokens = True,
+        )
+        translations += dec
+    return translations
+
+if __name__ == "__main__":
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file-name", type=str)
+    parser.add_argument("--output-file-name", type=str)
+    parser.add_argument("--language", type=str)
+    args, _ = parser.parse_known_args()
+    
+    # Set up Logging
+    logger = logging.getLogger(__name__)
+    marker = '===== ===== ===== ====='
+    
+    logging.basicConfig(
+        level = logging.getLevelName('INFO'),
+        handlers = [logging.StreamHandler(sys.stdout)],
+        format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    
+    input_dir = '/opt/ml/processing/input'
+    output_dir = '/opt/ml/processing/output'
+    
+    logger.info("Loading test input data")
+    raw_train_dataset = load_dataset("csv", data_files = os.path.join(input_dir, args.file_name))["train"]
+    
+    data = raw_train_dataset['text']
+    logger.info('Done loading input data')
+    
+    models = []
+    if args.language == 'de':
+        models = ['Helsinki-NLP/opus-mt-de-en', 'Helsinki-NLP/opus-mt-en-de', 
+                  'Helsinki-NLP/opus-mt-de-es', 'Helsinki-NLP/opus-mt-es-de', 
+                  'Helsinki-NLP/opus-mt-de-fr', 'Helsinki-NLP/opus-mt-fr-de',
+                  'Helsinki-NLP/opus-mt-de-it', 'Helsinki-NLP/opus-mt-it-de']
+    elif args.language == 'en':
+        models = ['Helsinki-NLP/opus-mt-en-de','Helsinki-NLP/opus-mt-de-en',
+                  'Helsinki-NLP/opus-mt-en-es','Helsinki-NLP/opus-mt-es-en',
+                  'Helsinki-NLP/opus-mt-en-fr','Helsinki-NLP/opus-mt-fr-en',
+                  'Helsinki-NLP/opus-mt-en-ru','Helsinki-NLP/opus-mt-ru-en']
+    
+    start_time = time.time()
+    
+    for i in range(4):
+        logger.info(len(data))
+        if i is 0:
+            src2tar, tar2src = models[0], models[1]
+        elif i is 1:
+            src2tar, tar2src = models[2], models[3]
+        elif i is 2:
+            src2tar, tar2src = models[4], models[5]
+        else:
+            src2tar, tar2src = models[6], models[7]
+        
+        translations = back_translate(data, src2tar, tar2src)
+        data += translations
+        
+    duration = time.time() - start_time
+    
+    # Deduplicate data
+    dd_data = list(set(data))
+    logging.info(f'\n\n\n\n {marker} Done with translation. Final dataset size is {len(data)} after deduplication is {len(dd_data)}, took {duration} seconds to process {marker}\n\n\n\n')
+    
+    # Upload to S3
+    buf = io.StringIO()
+    [buf.write(rev+'\n') for rev in dd_data]
+
+    with open(f'{output_dir}/{args.output_file_name}', 'w') as fd:
+        buf.seek(0)
+        shutil.copyfileobj(buf, fd)
+        
+    
