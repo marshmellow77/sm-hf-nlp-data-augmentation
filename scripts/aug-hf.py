@@ -13,10 +13,12 @@ from torch.utils.data.dataloader import DataLoader
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 def back_translate(data, src2tar, tar2src):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     src2tar_tokenizer = AutoTokenizer.from_pretrained(src2tar)
-    src2tar_model = AutoModelForSeq2SeqLM.from_pretrained(src2tar) 
+    src2tar_model = AutoModelForSeq2SeqLM.from_pretrained(src2tar).to(device)
     tar2src_tokenizer = AutoTokenizer.from_pretrained(tar2src)
-    tar2src_model = AutoModelForSeq2SeqLM.from_pretrained(tar2src)
+    tar2src_model = AutoModelForSeq2SeqLM.from_pretrained(tar2src).to(device)
     
     translations = []
     dataloader = DataLoader(data, batch_size = 16, shuffle = False)
@@ -28,7 +30,7 @@ def back_translate(data, src2tar, tar2src):
             return_tensors="pt", 
             truncation=True, 
             padding="longest"
-        )
+        ).to(device)
         src2tar_outputs = src2tar_model.generate(
             input_ids = batch.input_ids, 
             attention_mask=batch.attention_mask
