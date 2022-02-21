@@ -95,7 +95,7 @@ if __name__ == "__main__":
     
     # Deduplicate data
     dd_data = list(set(data))
-    logging.info(f'\n\n\n\n {marker} Done with translation. Final dataset size is {len(data)} after deduplication is {len(dd_data)}, took {duration} seconds to process {marker}\n\n\n\n')
+    logging.info(f'\n\n\n\n {marker} Done with translation. Final dataset size after deduplication is {len(data)}, took {duration} seconds to process {marker}\n\n\n\n')
     
     # Upload to S3
     buf = io.StringIO()
