@@ -86,14 +86,7 @@ if __name__ == "__main__":
     
     for i in range(4):
         logger.info(len(data))
-        if i is 0:
-            src2tar, tar2src = models[0], models[1]
-        elif i is 1:
-            src2tar, tar2src = models[2], models[3]
-        elif i is 2:
-            src2tar, tar2src = models[4], models[5]
-        else:
-            src2tar, tar2src = models[6], models[7]
+        src2tar, tar2src = models[i*2], models[i*2+1]
         
         translations = back_translate(data, src2tar, tar2src)
         data += translations
