@@ -101,7 +101,7 @@ if __name__ == "__main__":
     
     # Deduplicate data
     df_dataset.drop_duplicates(inplace=True,subset=['text'])
-    logging.info(f'\n\n\n\n {marker} Done with translation. Final dataset size is {len(data)} after deduplication is {len(dd_data)}, took {duration} seconds to process {marker}\n\n\n\n')
+    logging.info(f'\n\n\n\n {marker} Done with translation. Final dataset size is {df_dataset.shape[0]}, took {duration} seconds to process {marker}\n\n\n\n')
     
     # Save to disk in output_dir, which will uplodaded to S3 for us 
     df_dataset.to_csv(f'{output_dir}/{args.output_file_name}',index=False)
