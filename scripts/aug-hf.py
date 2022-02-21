@@ -7,6 +7,7 @@ import shutil
 import logging
 import argparse
 import pandas as pd
+from tqdm import tqdm
 from typing import List
 from datasets import load_dataset
 from torch.utils.data.dataloader import DataLoader
@@ -67,6 +68,7 @@ if __name__ == "__main__":
     logger.info("Loading test input data")
     raw_train_dataset = load_dataset("csv", data_files = os.path.join(input_dir, args.file_name))["train"]
     
+    df_dataset = raw_train_dataset.to_pandas()
     data = raw_train_dataset['text']
     logger.info('Done loading input data')
     
@@ -84,25 +86,24 @@ if __name__ == "__main__":
     
     start_time = time.time()
     
-    for i in range(4):
+    for i in range(len(models)/2):
         logger.info(len(data))
         src2tar, tar2src = models[i*2], models[i*2+1]
         
         translations = back_translate(data, src2tar, tar2src)
         data += translations
+        current_size = df_dataset.shape[0]
+        df_dataset = df_dataset.append(pd.DataFrame({'text':translations}))
+        df_dataset['ID'][current_size:] = df_dataset['ID'][:current_size]
+        df_dataset['label'][current_size:] = df_dataset['label'][:current_size]
         
     duration = time.time() - start_time
     
     # Deduplicate data
-    dd_data = list(set(data))
+    df_dataset.drop_duplicates(inplace=True,subset=['text'])
     logging.info(f'\n\n\n\n {marker} Done with translation. Final dataset size is {len(data)} after deduplication is {len(dd_data)}, took {duration} seconds to process {marker}\n\n\n\n')
     
-    # Upload to S3
-    buf = io.StringIO()
-    [buf.write(rev+'\n') for rev in dd_data]
+    # Save to disk in output_dir, which will uplodaded to S3 for us 
+    df_dataset.to_csv(f'{output_dir}/{args.output_file_name}',index=False)
 
-    with open(f'{output_dir}/{args.output_file_name}', 'w') as fd:
-        buf.seek(0)
-        shutil.copyfileobj(buf, fd)
-        
     
