@@ -86,7 +86,7 @@ if __name__ == "__main__":
     
     start_time = time.time()
     
-    for i in range(len(models)/2):
+    for i in range(int(len(models)/2)):
         logger.info(len(data))
         src2tar, tar2src = models[i*2], models[i*2+1]
         
